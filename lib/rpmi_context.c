@@ -29,6 +29,8 @@ struct rpmi_context {
 	/** Current number of service groups in the context */
 	rpmi_uint32_t num_groups;
 
+	enum rpmi_context_priv_mode priv_mode;
+
 	/** Current set of service groups in the context as an array */
 	struct rpmi_service_group **groups;
 
@@ -177,10 +179,16 @@ static enum rpmi_error rpmi_base_get_attributes(struct rpmi_service_group *group
 						rpmi_uint8_t *response_data)
 {
 	rpmi_uint32_t *resp = (void *)response_data;
+	struct rpmi_context *cntx = ((struct rpmi_base_group *)group->priv)->cntx;
+	rpmi_uint32_t flags = 0;
 
+	flags |= RPMI_BASE_FLAGS_F0_MSI_EN;
+	/* Set the context privilege level bit if context priv mode is M-mode */
+	flags |= (cntx->priv_mode == RPMI_CONTEXT_PRIV_M_MODE) ?
+					RPMI_BASE_FLAGS_F0_PRIVILEGE : 0;
 	*response_datalen = 5 * sizeof(*resp);
 	resp[0] = rpmi_to_xe32(trans->is_be, (rpmi_uint32_t)RPMI_SUCCESS);
-	resp[1] = rpmi_to_xe32(trans->is_be, RPMI_BASE_FLAGS_F0_MSI_EN);
+	resp[1] = rpmi_to_xe32(trans->is_be, flags);
 	resp[2] = 0;
 	resp[3] = 0;
 	resp[4] = 0;
@@ -327,6 +335,45 @@ static enum rpmi_error rpmi_service_notsupp_a2p_request(struct rpmi_service_grou
 			rpmi_to_xe32(trans->is_be, (rpmi_uint32_t)RPMI_ERR_NOTSUPP);
 
 	return RPMI_SUCCESS;
+}
+
+static enum rpmi_error rpmi_context_verify_priv_mode(struct rpmi_context *cntx,
+						     struct rpmi_service_group *group)
+{
+	enum rpmi_error rc = RPMI_SUCCESS;
+	enum rpmi_servicegroup_access_priv_mode group_priv_mode = -1;
+
+	switch (group->servicegroup_id) {
+	/**
+	 * These service groups are allowed on S-mode and
+	 * higher than that which is M-mode.
+	 */
+	case RPMI_SRVGRP_BASE:
+	case RPMI_SRVGRP_CPPC:
+	case RPMI_SRVGRP_CLOCK:
+		group_priv_mode = RPMI_SRVGRP_ACCESS_S_MODE_M_MODE;
+		break;
+	/**
+	 * These service groups are only accessible on
+	 * M-mode context
+	 */
+	case RPMI_SRVGRP_SYSTEM_RESET:
+	case RPMI_SRVGRP_SYSTEM_SUSPEND:
+	case RPMI_SRVGRP_HSM:
+		group_priv_mode = RPMI_SRVGRP_ACCESS_ONLY_M_MODE;
+		break;
+	default:
+		return RPMI_ERR_INVALID_PARAM;
+	}
+
+	if (cntx->priv_mode == RPMI_CONTEXT_PRIV_S_MODE &&
+		group_priv_mode == RPMI_SRVGRP_ACCESS_ONLY_M_MODE) {
+		DPRINTF("%s: %s group not allowed on %s context\n",
+		__func__, group->name, cntx->name);
+		rc = RPMI_ERR_DENIED;
+	}
+
+	return rc;
 }
 
 void rpmi_context_process_a2p_request(struct rpmi_context *cntx)
@@ -558,6 +605,10 @@ enum rpmi_error rpmi_context_add_group(struct rpmi_context *cntx,
 		}
 	}
 
+	rc = rpmi_context_verify_priv_mode(cntx, group);
+	if (rc)
+		goto fail_unlock;
+
 	cntx->groups[cntx->num_groups] = group;
 	cntx->num_groups++;
 
@@ -597,13 +648,15 @@ void rpmi_context_remove_group(struct rpmi_context *cntx,
 struct rpmi_context *rpmi_context_create(const char *name,
 					 struct rpmi_transport *trans,
 					 rpmi_uint32_t max_num_groups,
+					 enum rpmi_context_priv_mode priv_mode,
 					 rpmi_uint32_t plat_info_len,
 					 const char *plat_info)
 {
 	struct rpmi_context *cntx;
 	enum rpmi_error rc;
 
-	if (!name || !trans || !max_num_groups) {
+	if (!name || !trans || !max_num_groups ||
+				priv_mode >= RPMI_CONTEXT_PRIV_MODE_MAX_IDX) {
 		DPRINTF("%s: invalid parameters\n", __func__);
 		return NULL;
 	}
@@ -622,6 +675,7 @@ struct rpmi_context *rpmi_context_create(const char *name,
 	cntx->name = name;
 	cntx->trans = trans;
 	cntx->max_num_groups = max_num_groups;
+	cntx->priv_mode = priv_mode;
 
 	/**
 	 * Allocate for the array of pointers to the service

@@ -169,6 +169,30 @@ enum rpmi_queue_type {
 	RPMI_QUEUE_MAX,
 };
 
+/**
+ * RPMI Context Privilege Level
+ *
+ * The privilege level to which the RPMI
+ * context belongs or accessible.
+ */
+enum rpmi_context_priv_mode {
+	RPMI_CONTEXT_PRIV_S_MODE = 0,
+	RPMI_CONTEXT_PRIV_M_MODE = 1,
+	RPMI_CONTEXT_PRIV_MODE_MAX_IDX,
+};
+
+/**
+ * RPMI Service Group Access Privilege Level
+ *
+ * The lowest privilege level RPMI context to which
+ * the service group can be added or accessible.
+ */
+enum rpmi_servicegroup_access_priv_mode {
+	RPMI_SRVGRP_ACCESS_S_MODE_M_MODE = 0,
+	RPMI_SRVGRP_ACCESS_ONLY_M_MODE = 1,
+	RPMI_SRVGRP_ACCESS_PRIV_MODE_MAX_IDX,
+};
+
 /** RPMI ServiceGroups IDs */
 enum rpmi_servicegroup_id {
 	RPMI_SRVGRP_ID_MIN = 0,
@@ -646,6 +670,7 @@ void rpmi_context_remove_group(struct rpmi_context *cntx,
 struct rpmi_context *rpmi_context_create(const char *name,
 					 struct rpmi_transport *trans,
 					 rpmi_uint32_t max_num_groups,
+					 enum rpmi_context_priv_mode priv_mode,
 					 rpmi_uint32_t plat_info_len,
 					 const char *plat_info);
 
