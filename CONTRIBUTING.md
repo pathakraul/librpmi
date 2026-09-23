@@ -12,17 +12,21 @@ This project follows a lightweight Linux/OpenSBI-style workflow.
 5. Open a pull request against `riscv-software-src/librpmi:main`.
 6. If you add a new service group, include basic tests for it in the same series.
 
-Example:
+Example commit message:
 
 ```
 lib: cpcc: fix frequency bounds check
 
-Fixes: 1a2b3c4d5e6f ("lib: cpcc: add set perf path")
-Signed-off-by: Your Name <you@example.com>
+Explain what was wrong and why this change fixes it.
 ```
+
+For a bug fix, end the message with a trailer such as
+`Fixes: 1a2b3c4d5e6f ("lib: cpcc: add set perf path")`. Create the commit
+with `git commit -s`, which appends the `Signed-off-by:` trailer.
 
 ## Required checks before PR
 
+- `scripts/checkpatch.sh`
 - `make`
 - `make check`
 - `make LIBRPMI_TEST=y`
@@ -38,6 +42,24 @@ If documentation changes are included, also run:
 - Keep commit messages self-contained and explain user impact.
 
 Recommended (when applicable): `Reviewed-by:`, `Tested-by:`, `Acked-by:`.
+
+## Coding style
+
+librpmi follows the Linux kernel coding style
+(https://www.kernel.org/doc/html/latest/process/coding-style.html).
+Every pull request is checked with the kernel's `checkpatch.pl` in CI and
+must pass with no errors or warnings.
+
+Check your commits locally before opening a pull request:
+
+```
+scripts/checkpatch.sh                   # commits in origin/main..HEAD
+scripts/checkpatch.sh <base>..<head>    # a specific range
+scripts/checkpatch.sh -f lib/foo.c      # whole files
+```
+
+The repository also ships the kernel's `.clang-format` (use
+`git clang-format` on staged changes) and `.editorconfig`.
 
 ## DCO
 
